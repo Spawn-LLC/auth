@@ -1,0 +1,62 @@
+{
+  "name": "@spawn-llc/auth",
+  "version": "0.1.0",
+  "description": "Spawn shared identity — headless auth for the whole Spawn suite. One WorkOS project (named \"Spawn\") backs every app; this is the only place that touches it. WorkOS is an invisible engine.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js"
+    },
+    "./nextjs": {
+      "types": "./dist/nextjs/index.d.ts",
+      "import": "./dist/nextjs/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "IDENTITY.md"
+  ],
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
+    "build": "rm -rf dist && tsup",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run typecheck && pnpm run build",
+    "release": "pnpm run release:patch",
+    "release:patch": "pnpm version patch -m \"v%s\" && git push --follow-tags",
+    "release:minor": "pnpm version minor -m \"v%s\" && git push --follow-tags",
+    "release:major": "pnpm version major -m \"v%s\" && git push --follow-tags"
+  },
+  "dependencies": {
+    "@workos-inc/authkit-nextjs": "^4.2.0",
+    "@workos-inc/node": "^10.8.0"
+  },
+  "peerDependencies": {
+    "next": ">=16",
+    "react": "^18.2.0 || ^19.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@types/react": "^19.0.0",
+    "next": "^16.2.10",
+    "tsup": "^8.5.1",
+    "typescript": "^5.7.0"
+  }
+}
