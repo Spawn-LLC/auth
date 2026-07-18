@@ -1,20 +1,28 @@
 import { authkitMiddleware } from "@workos-inc/authkit-nextjs";
 
-import { DEFAULT_PUBLIC_PATHS, publicPaths } from "../config";
+import { publicPaths } from "../config";
 
 /**
- * The app-gating proxy/middleware. Wraps WorkOS AuthKit so every route requires a Spawn session
- * except the auth paths (`/login`, `/signup`, `/verify`, `/reset`, `/callback`, plus any in
- * `AUTH_PUBLIC_PATHS`). Use as the default export of the app's `proxy.ts` / `middleware.ts`.
+ * The app middleware/proxy. Because Spawn renders its OWN auth screens (headless), this only
+ * **refreshes** the WorkOS session cookie on each request — it does NOT redirect to any hosted page.
+ * Route protection is done in-app: authed layouts call `requireUser()`, which redirects
+ * unauthenticated visitors to `/login` (a Spawn screen). Use as the app's `proxy.ts` default export:
  *
  *   export default authProxy();
- *   export const config = { matcher: [...] };
+ *   export const config = { matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"] };
+ *
+ * Pass `{ enforce: true }` only if you want middleware-level gating to WorkOS's hosted UI instead
+ * of your own screens (not the Spawn default).
  */
-export function authProxy(options?: { unauthenticatedPaths?: string[] }) {
-  const unauthenticatedPaths = options?.unauthenticatedPaths ?? publicPaths();
-  return authkitMiddleware({
-    middlewareAuth: { enabled: true, unauthenticatedPaths },
-  });
+export function authProxy(options?: { enforce?: boolean; unauthenticatedPaths?: string[] }) {
+  if (options?.enforce) {
+    return authkitMiddleware({
+      middlewareAuth: {
+        enabled: true,
+        unauthenticatedPaths: options.unauthenticatedPaths ?? publicPaths(),
+      },
+    });
+  }
+  // Headless default: refresh the session only; gate via requireUser() in layouts.
+  return authkitMiddleware();
 }
-
-export { DEFAULT_PUBLIC_PATHS };
