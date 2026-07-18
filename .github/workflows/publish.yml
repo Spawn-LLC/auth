@@ -14,8 +14,10 @@ on:
 
 permissions:
   contents: read
-# Note: npm provenance (--provenance) is intentionally NOT used — it requires a
-# public source repo, and this repo is private. The npm package stays public.
+  id-token: write # enables npm OIDC "trusted publishing" (tokenless) if configured on npmjs
+# Publishing uses NPM_TOKEN (org secret). Alternatively configure a Trusted Publisher on npmjs
+# (package/org → Settings → Trusted Publishing → GitHub Actions: Spawn-LLC/auth, publish.yml) and
+# no token is needed. Provenance (--provenance) stays OFF (private source repo).
 
 jobs:
   publish:
