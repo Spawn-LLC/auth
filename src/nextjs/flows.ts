@@ -31,10 +31,55 @@ async function origin(): Promise<string> {
   return `${proto}://${host}`;
 }
 
+/**
+ * WorkOS error codes we can say something useful about. Everything else falls back to the sentence
+ * the call site supplies.
+ *
+ * The rule this enforces: a raw API string NEVER reaches a screen. WorkOS messages are written for
+ * whoever is reading the API logs — "The following requirement must be met:
+ * pending_authentication_token_string_required" is a correct thing to tell a developer and a
+ * useless thing to tell someone trying to sign up. Map what we recognise, fall back otherwise.
+ */
+const FRIENDLY: Record<string, string> = {
+  email_not_available: "An account with that email already exists. Try signing in instead.",
+  email_verification_required: "Check your email for a verification code to finish signing in.",
+  invalid_credentials: "Invalid email or password.",
+  invalid_one_time_code: "That code isn't right. Check the latest email and try again.",
+  password_strength_error: "That password is too weak. Use at least 8 characters, mixing letters and numbers.",
+  user_not_found: "Invalid email or password.",
+  organization_not_found: "That workspace no longer exists.",
+  mfa_enrollment: "This account needs multi-factor authentication set up before signing in.",
+  sso_required: "This account signs in through your company's identity provider.",
+  rate_limit_exceeded: "Too many attempts. Wait a minute and try again.",
+};
+
+/** The WorkOS error code, if this looks like a WorkOS exception. */
+function errorCode(err: unknown): string | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const code = (err as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
+}
+
+/**
+ * A user-facing sentence for a failed flow. Deliberately never returns `err.message` — see FRIENDLY.
+ * Field-validation failures carry their specifics in `errors[]` rather than `code`, so a password
+ * complaint is recognised there and everything else takes the call site's fallback.
+ */
 function message(err: unknown, fallback: string): string {
-  if (err && typeof err === "object" && "message" in err && typeof err.message === "string") {
-    return err.message;
+  const code = errorCode(err);
+  if (code && FRIENDLY[code]) return FRIENDLY[code];
+
+  // WorkOS 422s arrive as { code: "validation_error", errors: [{ field, code }] }.
+  const errors = (err as { errors?: unknown } | null)?.errors;
+  if (Array.isArray(errors)) {
+    const field = errors.find(
+      (e): e is { field: string } =>
+        !!e && typeof e === "object" && typeof (e as { field?: unknown }).field === "string",
+    )?.field;
+    if (field === "password") return FRIENDLY.password_strength_error;
+    if (field === "email") return "That email doesn't look right.";
   }
+
   return fallback;
 }
 
@@ -169,6 +214,17 @@ export async function verifyEmail(input: {
     await clearPendingToken();
     return { status: "ok" };
   } catch (err) {
+    // A wrong code is retryable, so the cookie stays. A rejected *token* is not — the session it
+    // represents is gone, and leaving it would make every retry fail the same way with a message
+    // about the code. Drop it so the next attempt reports the real problem.
+    const code = errorCode(err);
+    if (code && code.startsWith("pending_authentication_token")) {
+      await clearPendingToken();
+      return {
+        status: "error",
+        error: "This verification session expired. Sign in again to get a new code.",
+      };
+    }
     return { status: "error", error: message(err, "That code didn't work. Try again.") };
   }
 }
