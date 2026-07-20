@@ -1,4 +1,4 @@
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { getWorkOS, saveSession } from "@workos-inc/authkit-nextjs";
 
 import { workosClientId } from "../config";
@@ -38,6 +38,44 @@ function message(err: unknown, fallback: string): string {
   return fallback;
 }
 
+/**
+ * WorkOS signals "this account still needs to verify its email" by THROWING an
+ * AuthenticationException whose `pendingAuthenticationToken` is the only way to complete the
+ * verification. Pull it out structurally (no WorkOS type imported, so nothing leaks).
+ */
+function pendingVerificationToken(err: unknown): string | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const e = err as { code?: unknown; pendingAuthenticationToken?: unknown };
+  if (e.code !== "email_verification_required") return undefined;
+  return typeof e.pendingAuthenticationToken === "string" ? e.pendingAuthenticationToken : undefined;
+}
+
+/**
+ * The pending token has to survive the redirect from sign-up/sign-in to the verify screen. It is a
+ * short-lived credential, so it rides in an httpOnly cookie rather than the URL — apps just render
+ * their verify screen and call `verifyEmail({ code })`; this module threads the token for them.
+ */
+const PENDING_COOKIE = "spawn_pending_verification";
+const PENDING_TTL_SECONDS = 15 * 60;
+
+async function rememberPendingToken(token: string): Promise<void> {
+  (await cookies()).set(PENDING_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: PENDING_TTL_SECONDS,
+  });
+}
+
+async function takePendingToken(): Promise<string | undefined> {
+  return (await cookies()).get(PENDING_COOKIE)?.value;
+}
+
+async function clearPendingToken(): Promise<void> {
+  (await cookies()).delete(PENDING_COOKIE);
+}
+
 /** Email + password sign-in. Seals the Spawn session on success. */
 export async function signInWithPassword(input: {
   email: string;
@@ -52,6 +90,13 @@ export async function signInWithPassword(input: {
     await saveSession(res, await origin());
     return { status: "ok" };
   } catch (err) {
+    // Correct credentials, unverified address: route to the verify screen with the token that
+    // makes the emailed code redeemable, instead of reporting a bogus credential failure.
+    const pendingToken = pendingVerificationToken(err);
+    if (pendingToken) {
+      await rememberPendingToken(pendingToken);
+      return { status: "verify", email: input.email, pendingToken };
+    }
     return { status: "error", error: message(err, "Invalid email or password.") };
   }
 }
@@ -82,28 +127,46 @@ export async function signUp(input: {
       });
       await saveSession(res, await origin());
       return { status: "ok" };
-    } catch {
-      // Most likely email verification is required — WorkOS has sent (or will send) the mail.
-      await workos.userManagement.sendVerificationEmail({ userId: user.id }).catch(() => {});
-      return { status: "verify", email: input.email };
+    } catch (err) {
+      // Email verification required. WorkOS sends the mail itself and hands back the pending
+      // token on the thrown error — it MUST be carried to verifyEmail or the code cannot be
+      // redeemed, so surface it rather than re-sending a second mail.
+      const pendingToken = pendingVerificationToken(err);
+      if (pendingToken) {
+        await rememberPendingToken(pendingToken);
+      } else {
+        await workos.userManagement.sendVerificationEmail({ userId: user.id }).catch(() => {});
+      }
+      return { status: "verify", email: input.email, pendingToken };
     }
   } catch (err) {
     return { status: "error", error: message(err, "Could not create your account.") };
   }
 }
 
-/** Verify an email with the code WorkOS mailed; seals the session on success. */
+/**
+ * Verify an email with the code we mailed; seals the session on success. `pendingToken` comes from
+ * the preceding signUp/signIn result and is REQUIRED — the code alone cannot be redeemed.
+ */
 export async function verifyEmail(input: {
   code: string;
   pendingToken?: string;
 }): Promise<FlowResult> {
+  const pendingToken = input.pendingToken ?? (await takePendingToken());
+  if (!pendingToken) {
+    return {
+      status: "error",
+      error: "This verification session expired. Sign in again to get a new code.",
+    };
+  }
   try {
     const res = await getWorkOS().userManagement.authenticateWithEmailVerification({
       clientId: workosClientId(),
       code: input.code,
-      pendingAuthenticationToken: input.pendingToken ?? "",
+      pendingAuthenticationToken: pendingToken,
     });
     await saveSession(res, await origin());
+    await clearPendingToken();
     return { status: "ok" };
   } catch (err) {
     return { status: "error", error: message(err, "That code didn't work. Try again.") };
