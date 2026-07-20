@@ -36,10 +36,15 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Typecheck
         run: pnpm run typecheck
+
+      # A release must not be able to ship code the tests reject. This package gates every Spawn
+      # app's auth; a red suite here is a blocked release, not a warning.
+      - name: Test
+        run: pnpm run test
 
       # Pure package.json version write from the tag — no git, no install.
       - name: Set version from tag

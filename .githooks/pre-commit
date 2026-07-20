@@ -1,0 +1,4 @@
+#!/bin/sh
+# Fast gates only — keep committing snappy. The full set runs on pre-push.
+set -e
+pnpm run typecheck

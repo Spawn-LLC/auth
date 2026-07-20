@@ -13,6 +13,18 @@ import { publicPaths } from "../config";
  *
  * Pass `{ enforce: true }` only if you want middleware-level gating to WorkOS's hosted UI instead
  * of your own screens (not the Spawn default).
+ *
+ * ## There is deliberately no "redirect to my own /login" middleware mode
+ *
+ * It looks like the obvious third option, and it is a trap. The default mode does NOT protect
+ * anything — it only refreshes. So an app that has routes reachable *only* because middleware
+ * gates them (typically API route handlers with no in-handler check) becomes wide open the moment
+ * it adopts this proxy. Middleware gating reads as protection while being the easiest thing to
+ * silently lose to a matcher edit.
+ *
+ * Gate in the route instead: `requireUser()` in authed layouts, and an explicit `requireUser()` at
+ * the top of every API handler that returns data. That survives matcher changes, is greppable, and
+ * fails closed. Before adopting this proxy, audit for handlers whose only protection is the matcher.
  */
 export function authProxy(options?: { enforce?: boolean; unauthenticatedPaths?: string[] }) {
   if (options?.enforce) {

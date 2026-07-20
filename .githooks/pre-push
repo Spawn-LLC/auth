@@ -1,0 +1,7 @@
+#!/bin/sh
+# The same gates CI runs on a release tag, so a local failure here is guaranteed to fail the
+# release too. This package is the choke point for every Spawn app's auth — it does not get to
+# skip its own tests.
+set -e
+pnpm run typecheck
+pnpm run test

@@ -1,0 +1,29 @@
+name: CI
+
+# Every push and PR. The publish workflow only runs on a version tag, so without this nothing
+# validates a commit until someone cuts a release — which is how three reactive fixes shipped in
+# this package's first two days.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    name: Typecheck + test + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      # --frozen-lockfile so a package.json/lockfile drift fails here rather than silently
+      # re-resolving to versions nobody committed.
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm run test
+      - run: pnpm run build

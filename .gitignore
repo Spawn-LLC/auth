@@ -5,3 +5,12 @@ dist
 .env
 .env.local
 .turbo
+
+# Build artifacts and debugging leftovers. A packed tarball must never be
+# committed — npm is the distribution channel, and a stale .tgz in git invites
+# someone to consume a build that no commit produced.
+*.tgz
+.playwright-mcp/
+test-results/
+playwright-report/
+*.png
