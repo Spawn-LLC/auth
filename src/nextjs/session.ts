@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import type { Session, User } from "../domain";
@@ -9,8 +10,23 @@ import { isAllowedEmail, isWorkosConfigured } from "../config";
  * Generalized from admin's `@admin/auth` + audit's `lib/session.ts`.
  */
 
+/**
+ * Force this request to render dynamically.
+ *
+ * A session is per-request, so any page that asks about one must never be statically prerendered.
+ * Touching `headers()` is what tells Next that. It has to happen BEFORE any early return: without
+ * it, a build with no WORKOS_* env (which is every CI build) short-circuits to "signed out" and
+ * Next happily bakes that verdict — and whatever the page renders for a signed-out visitor — into
+ * static HTML. Pages that hit a database during that prerender fail the build outright, which is
+ * how this was found.
+ */
+async function markDynamic(): Promise<void> {
+  await headers();
+}
+
 /** The signed-in Spawn user, or null. Applies the optional email-domain gate. */
 export async function currentUser(): Promise<User | null> {
+  await markDynamic();
   if (!isWorkosConfigured()) return null;
   const { withAuth } = await import("@workos-inc/authkit-nextjs");
   const { user } = await withAuth();
@@ -27,6 +43,7 @@ export async function requireUser(redirectTo = "/login"): Promise<User> {
 
 /** The full Spawn session (user + active org + role), or null. */
 export async function session(): Promise<Session | null> {
+  await markDynamic();
   if (!isWorkosConfigured()) return null;
   const { withAuth } = await import("@workos-inc/authkit-nextjs");
   const info = await withAuth();
@@ -40,6 +57,7 @@ export async function session(): Promise<Session | null> {
 
 /** The signed-in email BEFORE the domain gate, if any — lets a login page show a wrong-domain denial. */
 export async function rejectedEmail(): Promise<string | null> {
+  await markDynamic();
   if (!isWorkosConfigured()) return null;
   const { withAuth } = await import("@workos-inc/authkit-nextjs");
   const { user } = await withAuth();

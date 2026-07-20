@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1
+
+**Fix: the session readers now force dynamic rendering before any early return.**
+
+`currentUser()`, `session()` and `rejectedEmail()` returned `null` when WorkOS was unconfigured
+*before* touching `headers()`. Every build runs without `WORKOS_*` env, so that short-circuit told
+Next the page was static — baking a signed-out verdict into HTML, and failing the build outright on
+any page that queries a database while prerendering. Found while migrating `admin`, whose own
+pre-migration code touched `headers()` first for exactly this reason.
+
 ## 0.2.0
 
 **Security — read this before upgrading an internal tool.**
