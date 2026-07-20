@@ -1,6 +1,6 @@
 {
   "name": "@spawn-llc/auth",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Spawn shared identity — headless auth for the whole Spawn suite. One WorkOS project (named \"Spawn\") backs every app; this is the only place that touches it. WorkOS is an invisible engine.",
   "license": "MIT",
   "type": "module",
