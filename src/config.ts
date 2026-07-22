@@ -21,6 +21,35 @@ export function isPublicPath(pathname: string, paths: string[] = publicPaths()):
 }
 
 /**
+ * The public paths for an app that declares extra ones IN CODE (not via `AUTH_PUBLIC_PATHS`):
+ * the shared defaults plus the caller's list. Lets an app keep app-specific public routes (a
+ * Slack webhook, a cron tick, an unsubscribe link) alongside the login-flow defaults without a
+ * local wrapper package. Pair with `isPublicPath(pathname, appPublicPaths([...]))`.
+ */
+export function appPublicPaths(extra: string[]): string[] {
+  return [...publicPaths(), ...extra];
+}
+
+/**
+ * The canonical proxy/middleware matcher — the ONE hardened regex every app should use, so the
+ * pattern is defined once here instead of copy-pasted per app. Runs the session-refresh proxy on
+ * everything except Next internals and genuine static assets.
+ *
+ * The image-extension carve-out is scoped with a negative lookahead for an "api/" path segment, so
+ * it can only ever match real static files (e.g. "/favicon.svg", "/og.png") — NEVER a route whose
+ * dynamic "[id]" segment happens to end in an image extension. Without that guard,
+ * "PATCH /api/thing/{id}.png" escaped the gate entirely: the extension satisfied the exclusion, yet
+ * Next still resolved the handler and ran it unauthenticated. API routes now always hit the proxy.
+ * Apps whose routes need in-request gating still call requireUser() / requireApiUser() in the
+ * handler — the matcher refreshes the cookie, it does not protect.
+ */
+export const AUTH_MATCHER =
+  "/((?!_next/static|_next/image|favicon\\.ico|(?!(?:.*/)?api/).*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)";
+
+/** Ready-made proxy config: `export const config = authProxyConfig` in an app's `proxy.ts`. */
+export const authProxyConfig = { matcher: [AUTH_MATCHER] } as const;
+
+/**
  * WorkOS (the engine) is "configured" once its three required secrets are present. When it is NOT
  * configured, the seam fails CLOSED (no session → redirect to sign-in) rather than letting requests
  * through. `WORKOS_CLIENT_ID` is public (`NEXT_PUBLIC_WORKOS_CLIENT_ID` also accepted).

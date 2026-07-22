@@ -19,9 +19,12 @@ export { WorkOSIdentityGateway, createIdentityGateway } from "./identity/workos-
 export {
   DEFAULT_PUBLIC_PATHS,
   publicPaths,
+  appPublicPaths,
   isPublicPath,
   isWorkosConfigured,
   allowedEmailDomains,
   isAllowedEmail,
   workosClientId,
+  AUTH_MATCHER,
+  authProxyConfig,
 } from "./config";

@@ -6,6 +6,7 @@
 export {
   currentUser,
   requireUser,
+  requireApiUser,
   session,
   rejectedEmail,
   signOut,
@@ -13,7 +14,8 @@ export {
   userDisplayName,
 } from "./session";
 
-export { authProxy } from "./proxy";
+export { authProxy, safeAuthProxy } from "./proxy";
+export { AUTH_MATCHER, authProxyConfig } from "../config";
 export { handleCallback } from "./callback";
 export {
   signInWithPassword,

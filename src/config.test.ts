@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   assertEmailDomainGate,
   allowedEmailDomains,
+  appPublicPaths,
+  AUTH_MATCHER,
   isAllowedEmail,
   isPublicPath,
   isWorkosConfigured,
@@ -106,6 +108,41 @@ describe("public paths", () => {
     process.env.AUTH_PUBLIC_PATHS = "/api/health, /unsubscribe";
     expect(publicPaths()).toContain("/api/health");
     expect(isPublicPath("/unsubscribe")).toBe(true);
+  });
+
+  it("appPublicPaths returns the defaults plus the app's in-code list", () => {
+    const paths = appPublicPaths(["/api/slack", "/api/cron/tick"]);
+    expect(paths).toContain("/login"); // a shared default
+    expect(paths).toContain("/api/slack");
+    expect(isPublicPath("/api/cron/tick", paths)).toBe(true);
+    expect(isPublicPath("/dashboard", paths)).toBe(false);
+  });
+});
+
+describe("AUTH_MATCHER (the shared hardened proxy matcher)", () => {
+  // Next anchors a matcher string as a full-path regex.
+  const runsOn = (pathname: string) => new RegExp(`^${AUTH_MATCHER}$`).test(pathname);
+
+  it("runs the gate on normal page routes", () => {
+    expect(runsOn("/dashboard")).toBe(true);
+    expect(runsOn("/gtm/api/companies/123")).toBe(true);
+  });
+
+  it("skips Next internals and genuine static assets", () => {
+    expect(runsOn("/_next/static/chunk.js")).toBe(false);
+    expect(runsOn("/favicon.ico")).toBe(false);
+    expect(runsOn("/og.png")).toBe(false);
+    expect(runsOn("/brand/logo.svg")).toBe(false);
+  });
+
+  /**
+   * F1 regression: a dynamic API segment ending in an image extension must NOT escape the gate.
+   * Before the "api/"-segment lookahead guard, "PATCH /gtm/api/companies/{id}.png" matched the
+   * static carve-out and ran unauthenticated.
+   */
+  it("still runs on an API route whose dynamic id ends in an image extension", () => {
+    expect(runsOn("/gtm/api/companies/123.png")).toBe(true);
+    expect(runsOn("/api/thing/abc.svg")).toBe(true);
   });
 });
 

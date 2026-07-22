@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.3.0
+
+**Thicken the package so apps need no local auth layer or copy-pasted wiring.** Everything the apps
+were reaching around for now lives here, and the docs stop recommending the unsafe matcher.
+
+- **`AUTH_MATCHER` + `authProxyConfig` (from `@spawn-llc/auth/config`).** The one hardened
+  proxy/middleware matcher, defined once instead of copy-pasted per app. It closes the "F1" bypass
+  where a dynamic API segment ending in an image extension (`PATCH /api/thing/{id}.png`) escaped the
+  gate. Use `export const config = authProxyConfig`. The README/IDENTITY examples previously showed a
+  matcher that excluded `/api` entirely and left that bypass open — fixed.
+- **`safeAuthProxy({ onUnconfigured })` (from `@spawn-llc/auth/nextjs`).** Fails **closed** when the
+  WORKOS_* secrets are absent, delegating to an app-supplied fallback (redirect / 404 / next). Folds
+  the three different hand-rolled "unconfigured" branches (`admin`, `landing`, `sites`) into one
+  shared code path. `authProxy()` is unchanged.
+- **`requireApiUser()` (from `@spawn-llc/auth/nextjs`).** The API-handler counterpart to
+  `requireUser()`: returns the `User`, or a `401` JSON `NextResponse` when signed out (never a
+  redirect, which a `fetch()` caller can't parse). Replaces the per-app `lib/api-auth.ts` wrappers.
+- **`appPublicPaths(extra)` (from `@spawn-llc/auth/config`).** Shared defaults plus an app's in-code
+  public routes, so an app with app-specific public paths (a Slack webhook, a cron tick) no longer
+  needs a local config wrapper package.
+- **Convention:** `proxy.ts` + `export default authProxy()` is canonical; use `middleware.ts` only
+  when genuinely wrapping the proxy (e.g. `safeAuthProxy`, host routing).
+
 ## 0.2.1
 
 **Fix: the session readers now force dynamic rendering before any early return.**

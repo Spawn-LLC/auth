@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { NextResponse } from "next/server";
 
 import type { Session, User } from "../domain";
 import { isAllowedEmail, isWorkosConfigured } from "../config";
@@ -39,6 +40,26 @@ export async function requireUser(redirectTo = "/login"): Promise<User> {
   const user = await currentUser();
   if (!user) redirect(redirectTo);
   return user;
+}
+
+/**
+ * The API-route counterpart to `requireUser()`. Returns the signed-in `User`, or a `401` JSON
+ * `NextResponse` when there is no valid session.
+ *
+ * Why not just `requireUser()` in an API handler: `requireUser()` redirects to `/login`, which is
+ * right for a browser navigation but wrong for a `fetch()` — the caller gets a `200` HTML login
+ * page and a JSON parse error instead of a clean `401`. Route handlers should branch on the type:
+ *
+ *   const user = await requireApiUser();
+ *   if (user instanceof NextResponse) return user; // 401
+ *   // ...use `user`
+ *
+ * Applies the same email-domain gate + dynamic-render marking as `currentUser()`.
+ */
+export async function requireApiUser(): Promise<User | NextResponse> {
+  const user = await currentUser();
+  if (user) return user;
+  return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 }
 
 /** The full Spawn session (user + active org + role), or null. */

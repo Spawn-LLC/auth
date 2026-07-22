@@ -16,7 +16,7 @@ const headersMock = vi.hoisted(() => vi.fn(async () => new Headers()));
 vi.mock("next/headers", () => ({ headers: headersMock }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 
-const { currentUser, session, rejectedEmail } = await import("./session");
+const { currentUser, session, rejectedEmail, requireApiUser } = await import("./session");
 
 beforeEach(() => {
   // No WORKOS_* env: every reader takes the short-circuit path.
@@ -43,5 +43,20 @@ describe("dynamic rendering is forced before any early return", () => {
   it("rejectedEmail touches headers() even when identity is unconfigured", async () => {
     expect(await rejectedEmail()).toBeNull();
     expect(headersMock).toHaveBeenCalled();
+  });
+});
+
+/**
+ * `requireApiUser` is the API-handler gate: unlike `requireUser()` it must NOT redirect (a `fetch()`
+ * caller would get HTML + a JSON parse error). With no session it returns a 401 `NextResponse` the
+ * handler forwards.
+ */
+describe("requireApiUser", () => {
+  it("returns a 401 NextResponse (not a redirect) when there is no session", async () => {
+    const { redirect } = await import("next/navigation");
+    const result = await requireApiUser();
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).status).toBe(401);
+    expect(redirect).not.toHaveBeenCalled();
   });
 });

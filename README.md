@@ -23,19 +23,36 @@ internal tools), `AUTH_PUBLIC_PATHS`.
 - **`@spawn-llc/auth`** — core, edge-safe: the `IdentityGateway` (orgs / members / roles / invites) +
   `createIdentityGateway()`, domain types (`Role`, `Session`, `Member`, `Invite`), and policy
   (`isWorkosConfigured`, `isAllowedEmail`, `isPublicPath`).
-- **`@spawn-llc/auth/config`** — the edge-safe policy alone (import from middleware; no SDK).
+- **`@spawn-llc/auth/config`** — the edge-safe policy alone (import from middleware; no SDK): the
+  gate + `isPublicPath` / `appPublicPaths` and the shared hardened matcher (`AUTH_MATCHER`,
+  `authProxyConfig`).
 - **`@spawn-llc/auth/nextjs`** — the Next server surface: the session seam
-  (`currentUser` / `requireUser` / `session` / `signOut` / `switchOrganization`), `authProxy()`,
-  `handleCallback()`, and the headless flows (`signInWithPassword`, `signUp`, `verifyEmail`,
-  `requestPasswordReset`, `resetPassword`, `startOAuth`).
+  (`currentUser` / `requireUser` / `requireApiUser` / `session` / `signOut` / `switchOrganization`),
+  `authProxy()` / `safeAuthProxy()`, `handleCallback()`, and the headless flows
+  (`signInWithPassword`, `signUp`, `verifyEmail`, `requestPasswordReset`, `resetPassword`,
+  `startOAuth`).
 
 ## Wire an app (Next.js)
 
 ```ts
-// proxy.ts (gate every route)
+// proxy.ts (refresh the session on every route; gate in-app via requireUser())
 import { authProxy } from "@spawn-llc/auth/nextjs";
+import { authProxyConfig } from "@spawn-llc/auth/config";
 export default authProxy();
-export const config = { matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"] };
+export const config = authProxyConfig; // the one shared hardened matcher — don't hand-write it
+```
+
+Need to fail closed when the WORKOS_* secrets are absent (a preview deploy)? Use a `middleware.ts`
+that wraps the proxy with `safeAuthProxy({ onUnconfigured })` instead of a bare `proxy.ts`.
+
+```ts
+// app/(any)/api/route.ts — gate a route handler (401 JSON, never a redirect)
+import { requireApiUser } from "@spawn-llc/auth/nextjs";
+export async function GET() {
+  const user = await requireApiUser();
+  if (user instanceof Response) return user; // 401 when signed out
+  // ...use `user`
+}
 ```
 
 ```ts

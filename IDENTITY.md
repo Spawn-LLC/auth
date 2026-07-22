@@ -51,8 +51,11 @@ app                        →  own /login /signup /verify /reset routes renderi
 1. `pnpm add @spawn-llc/auth @spawn-llc/design-system`.
 2. Env from the "Spawn" application: `WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, `WORKOS_COOKIE_PASSWORD`,
    `NEXT_PUBLIC_WORKOS_REDIRECT_URI=<app>/callback`; add that redirect URI in the WorkOS dashboard.
-3. `proxy.ts` → `export default authProxy()`. `app/callback/route.ts` → `export const GET =
-   handleCallback()`.
+3. `proxy.ts` → `export default authProxy()` + `export const config = authProxyConfig` (the shared
+   hardened matcher). `app/callback/route.ts` → `export const GET = handleCallback()`. If the app
+   must stay up on preview deploys with no secrets, use a `middleware.ts` wrapping
+   `safeAuthProxy({ onUnconfigured })` instead. Gate API handlers with `requireApiUser()` (401 JSON,
+   never a redirect); pages/layouts with `requireUser()`.
 4. Build `/login`, `/signup`, `/verify`, `/reset` rendering the DS screens, wired to the headless
    flows via `"use server"` actions.
 5. Internal-only tool? Set `ALLOWED_EMAIL_DOMAINS=spawnpartners.com`.
