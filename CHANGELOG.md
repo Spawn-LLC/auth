@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.1
+
+**Fix: the `config.matcher` recommendation from 0.3.0 does not build under Next 16.** Next requires
+`config.matcher` entries to be inline string literals it can statically parse — `export const config
+= authProxyConfig` (an imported object) fails the build with "the exported `config` field needs to
+be a static object". 0.3.0 shipped and documented exactly that broken pattern.
+
+- **Removed `authProxyConfig`.** It could not be used for its only purpose. Apps paste the matcher
+  literal inline instead.
+- **Added the `AuthMatcher` type** (`typeof AUTH_MATCHER`). Pin the inlined literal with
+  `satisfies { readonly matcher: readonly [AuthMatcher] }` so `tsc` fails if the copy ever drifts
+  from the shared `AUTH_MATCHER`. `AUTH_MATCHER` itself is unchanged.
+- **Docs:** `proxy.ts` is now the one canonical filename (Next 16 deprecates `middleware.ts`,
+  including for apps that wrap the proxy — `safeAuthProxy` is a `proxy.ts` default export too).
+
 ## 0.3.0
 
 **Thicken the package so apps need no local auth layer or copy-pasted wiring.** Everything the apps

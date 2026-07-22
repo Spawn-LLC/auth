@@ -24,8 +24,8 @@ internal tools), `AUTH_PUBLIC_PATHS`.
   `createIdentityGateway()`, domain types (`Role`, `Session`, `Member`, `Invite`), and policy
   (`isWorkosConfigured`, `isAllowedEmail`, `isPublicPath`).
 - **`@spawn-llc/auth/config`** — the edge-safe policy alone (import from middleware; no SDK): the
-  gate + `isPublicPath` / `appPublicPaths` and the shared hardened matcher (`AUTH_MATCHER`,
-  `authProxyConfig`).
+  gate + `isPublicPath` / `appPublicPaths` and the shared hardened matcher (`AUTH_MATCHER` + its
+  `AuthMatcher` literal type for pinning an app's inlined `config.matcher`).
 - **`@spawn-llc/auth/nextjs`** — the Next server surface: the session seam
   (`currentUser` / `requireUser` / `requireApiUser` / `session` / `signOut` / `switchOrganization`),
   `authProxy()` / `safeAuthProxy()`, `handleCallback()`, and the headless flows
@@ -34,16 +34,36 @@ internal tools), `AUTH_PUBLIC_PATHS`.
 
 ## Wire an app (Next.js)
 
+Next 16 calls this file `proxy.ts` (the old `middleware.ts` name is deprecated). Next requires
+`config.matcher` to be an **inline** string literal — a `const`/imported object fails the build — so
+paste the matcher and pin it to the shared `AuthMatcher` type, which fails `tsc` if it ever drifts:
+
 ```ts
 // proxy.ts (refresh the session on every route; gate in-app via requireUser())
 import { authProxy } from "@spawn-llc/auth/nextjs";
-import { authProxyConfig } from "@spawn-llc/auth/config";
+import type { AuthMatcher } from "@spawn-llc/auth/config";
 export default authProxy();
-export const config = authProxyConfig; // the one shared hardened matcher — don't hand-write it
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon\\.ico|(?!(?:.*/)?api/).*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
+} satisfies { readonly matcher: readonly [AuthMatcher] };
 ```
 
-Need to fail closed when the WORKOS_* secrets are absent (a preview deploy)? Use a `middleware.ts`
-that wraps the proxy with `safeAuthProxy({ onUnconfigured })` instead of a bare `proxy.ts`.
+Need to fail closed when the WORKOS_* secrets are absent (a preview deploy)? Keep the same `proxy.ts`
+but wrap with `safeAuthProxy({ onUnconfigured })` as the default export:
+
+```ts
+// proxy.ts (fail closed when identity is unconfigured)
+import { safeAuthProxy } from "@spawn-llc/auth/nextjs";
+import { isPublicPath } from "@spawn-llc/auth/config";
+import { NextResponse } from "next/server";
+export default safeAuthProxy({
+  onUnconfigured: (req) =>
+    isPublicPath(req.nextUrl.pathname)
+      ? NextResponse.next()
+      : NextResponse.redirect(new URL("/login", req.url)),
+});
+// (same `config` block as above)
+```
 
 ```ts
 // app/(any)/api/route.ts — gate a route handler (401 JSON, never a redirect)

@@ -7,16 +7,13 @@ import { isWorkosConfigured, publicPaths } from "../config";
  * The app middleware/proxy. Because Spawn renders its OWN auth screens (headless), this only
  * **refreshes** the WorkOS session cookie on each request — it does NOT redirect to any hosted page.
  * Route protection is done in-app: authed layouts call `requireUser()`, which redirects
- * unauthenticated visitors to `/login` (a Spawn screen). Use as the app's `proxy.ts` default export,
- * with the shared hardened matcher (`authProxyConfig`) — do NOT hand-write the regex:
- *
- *   import { authProxy } from "@spawn-llc/auth/nextjs";
- *   import { authProxyConfig } from "@spawn-llc/auth/config";
- *   export default authProxy();
- *   export const config = authProxyConfig;
+ * unauthenticated visitors to `/login` (a Spawn screen). Use as the app's `proxy.ts` default export
+ * (Next 16's name; `middleware.ts` is deprecated). Next requires `config.matcher` to be an inline
+ * string literal, so paste the matcher and pin it to the shared `AuthMatcher` type — see
+ * {@link AuthMatcher} in `../config` for the exact snippet.
  *
  * When an app needs its own fail-closed behavior for the WORKOS-unconfigured case (a preview deploy
- * with no secrets), wrap with `safeAuthProxy` from a `middleware.ts` instead of `proxy.ts`.
+ * with no secrets), wrap with `safeAuthProxy` — still from `proxy.ts`.
  *
  * Pass `{ enforce: true }` only if you want middleware-level gating to WorkOS's hosted UI instead
  * of your own screens (not the Spawn default).
@@ -56,9 +53,9 @@ export function authProxy(options?: { enforce?: boolean; unauthenticatedPaths?: 
  * app-supplied `onUnconfigured` handler so the app keeps its own fallback (redirect to `/login`,
  * 404 the gated area, `NextResponse.next()` for a public-only preview, …).
  *
- *   // middleware.ts (this wraps the proxy, so it is a middleware, not a bare proxy)
+ *   // proxy.ts
  *   import { safeAuthProxy } from "@spawn-llc/auth/nextjs";
- *   import { authProxyConfig, isPublicPath } from "@spawn-llc/auth/config";
+ *   import { isPublicPath } from "@spawn-llc/auth/config";
  *   import { NextResponse } from "next/server";
  *   export default safeAuthProxy({
  *     onUnconfigured: (req) =>
@@ -66,7 +63,7 @@ export function authProxy(options?: { enforce?: boolean; unauthenticatedPaths?: 
  *         ? NextResponse.next()
  *         : NextResponse.redirect(new URL("/login", req.url)),
  *   });
- *   export const config = authProxyConfig;
+ *   // export const config = { matcher: [...] } satisfies { readonly matcher: readonly [AuthMatcher] }
  *
  * The configured/unconfigured decision is made ONCE, when the middleware is constructed (module
  * load) — identity config does not change between requests within a running process.

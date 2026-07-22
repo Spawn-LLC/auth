@@ -46,8 +46,28 @@ export function appPublicPaths(extra: string[]): string[] {
 export const AUTH_MATCHER =
   "/((?!_next/static|_next/image|favicon\\.ico|(?!(?:.*/)?api/).*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)";
 
-/** Ready-made proxy config: `export const config = authProxyConfig` in an app's `proxy.ts`. */
-export const authProxyConfig = { matcher: [AUTH_MATCHER] } as const;
+/**
+ * The literal type of {@link AUTH_MATCHER}, for pinning an app's inlined matcher to the shared
+ * source without any runtime import.
+ *
+ * Next requires `config.matcher` entries to be INLINE string literals it can statically parse at
+ * build time — a `const`/imported reference (`export const config = someObject`) fails the build
+ * with "the exported `config` field needs to be a static object". So an app cannot consume a
+ * ready-made config object; it must paste the literal. To stop that copy from silently drifting,
+ * pin it with `satisfies`:
+ *
+ *   import { authProxy } from "@spawn-llc/auth/nextjs";
+ *   import type { AuthMatcher } from "@spawn-llc/auth/config";
+ *   export default authProxy();
+ *   export const config = {
+ *     matcher: [AUTH_MATCHER_LITERAL],   // paste the value of AUTH_MATCHER inline (see README)
+ *   } satisfies { readonly matcher: readonly [AuthMatcher] };
+ *
+ * `tsc` then fails if the pasted literal ever diverges from `AUTH_MATCHER`. The import is type-only,
+ * so nothing lands in the bundle. (The literal is spelled out in README.md / IDENTITY.md — it is
+ * omitted from this doc-comment because the regex contains a comment-terminating sequence.)
+ */
+export type AuthMatcher = typeof AUTH_MATCHER;
 
 /**
  * WorkOS (the engine) is "configured" once its three required secrets are present. When it is NOT

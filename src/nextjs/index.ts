@@ -15,7 +15,8 @@ export {
 } from "./session";
 
 export { authProxy, safeAuthProxy } from "./proxy";
-export { AUTH_MATCHER, authProxyConfig } from "../config";
+export { AUTH_MATCHER } from "../config";
+export type { AuthMatcher } from "../config";
 export { handleCallback } from "./callback";
 export {
   signInWithPassword,

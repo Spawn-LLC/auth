@@ -26,5 +26,5 @@ export {
   isAllowedEmail,
   workosClientId,
   AUTH_MATCHER,
-  authProxyConfig,
 } from "./config";
+export type { AuthMatcher } from "./config";
